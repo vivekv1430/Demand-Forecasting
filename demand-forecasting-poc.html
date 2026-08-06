@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demand Forecasting PoC</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#07080f;color:#dde1f0;min-height:100vh;}
+:root{--purple:#a78bfa;--purple-d:rgba(167,139,250,0.12);--teal:#2dd4bf;--orange:#fb923c;--green:#4ade80;--red:#f87171;--border:#232535;--surface:#0f1018;--surface2:#171820;}
+
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:50px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.wordmark{font-size:15px;font-weight:700;color:var(--purple);letter-spacing:0.05em;}
+.topbar-tag{font-size:10px;color:#454860;font-family:monospace;}
+
+.main{display:grid;grid-template-columns:270px 1fr;min-height:calc(100vh - 50px);}
+
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:20px;}
+.s-label{font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#454860;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);font-family:monospace;}
+
+.upload-zone{border:2px dashed var(--border);padding:20px 12px;text-align:center;cursor:pointer;border-radius:4px;background:var(--surface2);transition:border-color 0.2s;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--purple);}
+.upload-zone input{display:none;}
+.upload-icon{font-size:26px;display:block;margin-bottom:6px;}
+.upload-label{font-size:12px;font-weight:600;display:block;margin-bottom:3px;}
+.upload-sub{font-size:10px;color:#454860;font-family:monospace;}
+.sample-btn{width:100%;margin-top:8px;padding:8px;background:var(--purple);color:#07080f;border:none;border-radius:3px;font-size:11px;cursor:pointer;font-family:monospace;font-weight:700;letter-spacing:0.1em;}
+.sample-btn:hover{opacity:0.85;}
+.format-hint{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--purple);padding:10px 12px;font-size:10px;color:#8890b0;line-height:1.8;font-family:monospace;}
+.format-hint strong{color:#dde1f0;}
+
+label{font-size:11px;font-weight:600;color:#8890b0;display:block;margin-bottom:4px;}
+select,input[type=range]{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface2);font-size:11px;color:#dde1f0;appearance:none;font-family:monospace;}
+.range-row{display:flex;align-items:center;gap:8px;}
+.rval{font-size:11px;color:#8890b0;min-width:40px;text-align:right;font-family:monospace;}
+.filter-group{display:flex;flex-direction:column;gap:10px;}
+.method-guide{background:var(--surface2);border:1px solid var(--border);padding:10px 12px;font-size:10px;color:#8890b0;line-height:1.8;font-family:monospace;}
+.method-guide strong{color:#dde1f0;}
+
+.content{padding:24px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;color:#454860;gap:10px;}
+.empty-icon{font-size:48px;}
+.empty-title{font-size:20px;font-weight:700;color:#8890b0;}
+.empty-sub{font-size:13px;line-height:1.7;max-width:320px;}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;}
+.kpi{background:var(--surface);border:1px solid var(--border);padding:16px 16px 12px;position:relative;overflow:hidden;}
+.kpi::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:3px;}
+.kpi.kp::after{background:var(--purple);}
+.kpi.kt::after{background:var(--teal);}
+.kpi.ko::after{background:var(--orange);}
+.kpi.kg::after{background:var(--green);}
+.kpi-label{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#454860;margin-bottom:7px;font-family:monospace;}
+.kpi-val{font-size:28px;font-weight:800;line-height:1;margin-bottom:3px;}
+.kpi.kp .kpi-val{color:var(--purple);}
+.kpi.kt .kpi-val{color:var(--teal);}
+.kpi.ko .kpi-val{color:var(--orange);}
+.kpi.kg .kpi-val{color:var(--green);}
+.kpi-sub{font-size:10px;color:#454860;}
+
+.panel{background:var(--surface);border:1px solid var(--border);overflow:hidden;}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.panel-title{font-size:16px;font-weight:700;}
+.panel-sub{font-size:10px;color:#454860;font-family:monospace;}
+.panel-body{padding:18px;}
+
+/* SVG CHART */
+.chart-wrap{width:100%;overflow-x:auto;}
+svg.chart{display:block;width:100%;min-width:600px;}
+
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#8890b0;}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+.legend-line{width:18px;height:2px;border-top:2px dashed;}
+
+.acc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-bottom:4px;}
+.acc-cell{background:var(--surface2);border:1px solid var(--border);padding:14px 16px;}
+.ac-label{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#454860;margin-bottom:6px;font-family:monospace;}
+.ac-val{font-size:26px;font-weight:800;line-height:1;}
+.ac-sub{font-size:10px;color:#454860;margin-top:3px;}
+
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:var(--surface2);border-bottom:2px solid var(--border);}
+thead th{padding:9px 14px;text-align:left;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#454860;font-family:monospace;}
+tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+tbody tr:hover{background:var(--surface2);}
+td{padding:10px 14px;color:#8890b0;font-family:monospace;font-size:11px;}
+
+.pill{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;font-weight:700;font-family:monospace;}
+.pill-p{background:var(--purple-d);color:var(--purple);}
+.pill-t{background:rgba(45,212,191,0.12);color:var(--teal);}
+.pill-o{background:rgba(251,146,60,0.12);color:var(--orange);}
+
+.export-btn{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;font-size:10px;cursor:pointer;color:#8890b0;transition:border-color 0.15s,color 0.15s;font-family:monospace;}
+.export-btn:hover{border-color:var(--purple);color:var(--purple);}
+
+@media(max-width:800px){.main{grid-template-columns:1fr;}.kpi-row{grid-template-columns:1fr 1fr;}.acc-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="wordmark">Demand Forecasting PoC</span>
+  <span class="topbar-tag" id="status">No data loaded</span>
+</div>
+<div class="main">
+  <div class="sidebar">
+    <div>
+      <div class="s-label">Data Source</div>
+      <div class="upload-zone" id="zone">
+        <input type="file" id="file-in" accept=".csv">
+        <span class="upload-icon">📈</span>
+        <span class="upload-label">Drop CSV here</span>
+        <span class="upload-sub">or click to browse</span>
+      </div>
+      <button class="sample-btn" id="sample-btn">↯ Load Sample Data</button>
+      <div class="format-hint" style="margin-top:10px;">
+        <strong>Required columns:</strong><br>
+        sku<br>week_start<br>actual_demand<br><br>
+        <strong>Optional:</strong><br>
+        category, warehouse
+      </div>
+    </div>
+    <div>
+      <div class="s-label">Forecast Settings</div>
+      <div class="filter-group">
+        <div><label>SKU</label><select id="f-sku"><option value="">Select SKU...</option></select></div>
+        <div><label>Method</label>
+          <select id="f-method">
+            <option value="sma">Simple Moving Average</option>
+            <option value="wma">Weighted Moving Average</option>
+            <option value="es" selected>Exponential Smoothing</option>
+            <option value="holt">Holt Linear Trend</option>
+          </select>
+        </div>
+        <div><label>Lookback Window (weeks)</label>
+          <div class="range-row"><input type="range" id="f-window" min="4" max="26" value="12"><span class="rval" id="win-val">12 wk</span></div>
+        </div>
+        <div><label>Forecast Horizon (weeks)</label>
+          <div class="range-row"><input type="range" id="f-horizon" min="4" max="26" value="13"><span class="rval" id="hor-val">13 wk</span></div>
+        </div>
+        <div><label>Alpha (ES / Holt)</label>
+          <div class="range-row"><input type="range" id="f-alpha" min="1" max="9" value="3"><span class="rval" id="alpha-val">0.3</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="method-guide">
+      <strong>Methods:</strong><br>
+      SMA — avg of last N weeks<br>
+      WMA — recent weeks weighted higher<br>
+      ES — exponential decay smoothing<br>
+      Holt — ES + linear trend
+    </div>
+  </div>
+
+  <div class="content" id="content">
+    <div class="empty">
+      <span class="empty-icon">🔮</span>
+      <div class="empty-title">No Forecast Yet</div>
+      <div class="empty-sub">Load sample data or upload a CSV with weekly demand history, then select a SKU to generate a forecast.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let skuData = {};
+
+// ── ALGORITHMS ──────────────────────────────────────────────────────────
+function sma(hist, win) {
+  const f=[];
+  for(let i=win;i<=hist.length;i++){
+    const sl=hist.slice(i-win,i);
+    f.push(sl.reduce((a,b)=>a+b,0)/win);
+  }
+  return f;
+}
+
+function wma(hist, win) {
+  const w=Array.from({length:win},(_,i)=>i+1);
+  const ws=w.reduce((a,b)=>a+b,0);
+  const f=[];
+  for(let i=win;i<=hist.length;i++){
+    const sl=hist.slice(i-win,i);
+    f.push(sl.reduce((a,v,j)=>a+v*w[j],0)/ws);
+  }
+  return f;
+}
+
+function es(hist, alpha) {
+  const f=[hist[0]];
+  for(let i=1;i<hist.length;i++) f.push(alpha*hist[i]+(1-alpha)*f[i-1]);
+  return f;
+}
+
+function holt(hist, alpha, beta=0.1) {
+  let lv=hist[0], tr=hist[1]-hist[0];
+  const f=[lv+tr];
+  for(let i=1;i<hist.length;i++){
+    const pl=lv;
+    lv=alpha*hist[i]+(1-alpha)*(lv+tr);
+    tr=beta*(lv-pl)+(1-beta)*tr;
+    f.push(lv+tr);
+  }
+  return {fitted:f, level:lv, trend:tr};
+}
+
+function forecast(hist, method, win, horizon, alpha) {
+  const n=hist.length;
+  let fitted=[], future=[];
+
+  if(method==='sma'){
+    const f=sma(hist,win);
+    fitted=hist.map((_,i)=>i<win?null:f[i-win]);
+    const last=f[f.length-1];
+    future=Array(horizon).fill(last);
+  } else if(method==='wma'){
+    const f=wma(hist,win);
+    fitted=hist.map((_,i)=>i<win?null:f[i-win]);
+    const last=f[f.length-1];
+    future=Array(horizon).fill(last);
+  } else if(method==='es'){
+    const f=es(hist,alpha);
+    fitted=hist.map((_,i)=>i===0?null:f[i-1]);
+    const last=f[f.length-1];
+    future=Array(horizon).fill(last);
+  } else if(method==='holt'){
+    const res=holt(hist,alpha);
+    fitted=hist.map((_,i)=>i===0?null:res.fitted[i-1]);
+    for(let h=1;h<=horizon;h++) future.push(Math.max(0,res.level+res.trend*h));
+  }
+  return {fitted, future};
+}
+
+function accuracy(hist, fitted) {
+  const pairs=hist.map((a,i)=>[a,fitted[i]]).filter(([a,f])=>f!==null&&a>0);
+  if(!pairs.length)return{mape:null,mae:null,bias:null};
+  const mape=pairs.reduce((s,[a,f])=>s+Math.abs((a-f)/a),0)/pairs.length*100;
+  const mae=pairs.reduce((s,[a,f])=>s+Math.abs(a-f),0)/pairs.length;
+  const bias=pairs.reduce((s,[a,f])=>s+(f-a),0)/pairs.length;
+  return{mape,mae,bias};
+}
+
+// ── SVG CHART ────────────────────────────────────────────────────────────
+function buildSVGChart(weeks, actual, fitted, futureWeeks, future) {
+  const W=900, H=320;
+  const PAD={top:30,right:30,bottom:50,left:70};
+  const cW=W-PAD.left-PAD.right, cH=H-PAD.top-PAD.bottom;
+  const all=[...actual,...fitted.filter(v=>v!==null),...future].filter(v=>v!=null);
+  const maxV=Math.max(...all)*1.15, minV=0;
+  const total=weeks.length+futureWeeks.length;
+  const xS=i=>PAD.left+(i/(total-1))*cW;
+  const yS=v=>PAD.top+cH-((v-minV)/(maxV-minV))*cH;
+
+  let svg=`<svg class="chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Grid
+  for(let t=0;t<=4;t++){
+    const v=minV+(maxV-minV)*t/4;
+    const y=yS(v);
+    svg+=`<line x1="${PAD.left}" y1="${y}" x2="${W-PAD.right}" y2="${y}" stroke="#232535" stroke-width="1"/>`;
+    svg+=`<text x="${PAD.left-6}" y="${y+4}" text-anchor="end" fill="#454860" font-size="10" font-family="monospace">${Math.round(v).toLocaleString()}</text>`;
+  }
+
+  // X labels every 13 weeks
+  weeks.concat(futureWeeks).forEach((w,i)=>{
+    if(i%13===0){
+      svg+=`<text x="${xS(i)}" y="${H-PAD.bottom+18}" text-anchor="middle" fill="#454860" font-size="9" font-family="monospace">${w.slice(0,7)}</text>`;
+    }
+  });
+
+  // Forecast zone
+  const splitX=xS(weeks.length-1);
+  svg+=`<rect x="${splitX}" y="${PAD.top}" width="${W-PAD.right-splitX}" height="${cH}" fill="rgba(167,139,250,0.04)"/>`;
+  svg+=`<line x1="${splitX}" y1="${PAD.top}" x2="${splitX}" y2="${PAD.top+cH}" stroke="rgba(167,139,250,0.35)" stroke-width="1" stroke-dasharray="4,4"/>`;
+  svg+=`<text x="${splitX+6}" y="${PAD.top+14}" fill="#fb923c" font-size="9" font-family="monospace" font-weight="bold">FORECAST →</text>`;
+
+  // CI band
+  const connX=xS(weeks.length-1), connY=yS(actual[actual.length-1]);
+  let bandTop='', bandBot='';
+  future.forEach((v,i)=>{
+    const x=xS(weeks.length+i);
+    bandTop+=`${i===0?'M':'L'}${x},${yS(v*1.15)} `;
+    bandBot=`L${x},${yS(v*0.85)} `+bandBot;
+  });
+  svg+=`<path d="M${connX},${connY} ${bandTop} ${bandBot} Z" fill="rgba(251,146,60,0.08)"/>`;
+
+  // Fitted line
+  let fPath='';
+  fitted.forEach((v,i)=>{
+    if(v===null)return;
+    fPath+=(fPath===''?'M':'L')+`${xS(i)},${yS(v)} `;
+  });
+  if(fPath)svg+=`<path d="${fPath}" fill="none" stroke="#2dd4bf" stroke-width="1.5"/>`;
+
+  // Actual line
+  let aPath=actual.map((v,i)=>`${i===0?'M':'L'}${xS(i)},${yS(v)}`).join(' ');
+  svg+=`<path d="${aPath}" fill="none" stroke="#a78bfa" stroke-width="2"/>`;
+
+  // Future line
+  let fuPath=`M${connX},${connY}`;
+  future.forEach((v,i)=>fuPath+=` L${xS(weeks.length+i)},${yS(v)}`);
+  svg+=`<path d="${fuPath}" fill="none" stroke="#fb923c" stroke-width="2" stroke-dasharray="6,3"/>`;
+
+  svg+=`</svg>`;
+  return svg;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────
+function render() {
+  const sku=document.getElementById('f-sku').value;
+  const method=document.getElementById('f-method').value;
+  const win=parseInt(document.getElementById('f-window').value);
+  const horizon=parseInt(document.getElementById('f-horizon').value);
+  const alpha=parseInt(document.getElementById('f-alpha').value)/10;
+
+  if(!sku||!skuData[sku]){
+    document.getElementById('content').innerHTML='<div class="empty"><span class="empty-icon">🔮</span><div class="empty-title">Select a SKU</div><div class="empty-sub">Pick a SKU from the sidebar to generate a forecast.</div></div>';
+    return;
+  }
+
+  const series=skuData[sku];
+  const weeks=series.map(s=>s.week);
+  const hist=series.map(s=>s.demand);
+  const {fitted,future}=forecast(hist,method,win,horizon,alpha);
+  const acc=accuracy(hist,fitted);
+
+  const lastWeek=new Date(weeks[weeks.length-1]);
+  const futureWeeks=Array.from({length:horizon},(_,i)=>{
+    const d=new Date(lastWeek); d.setDate(d.getDate()+7*(i+1));
+    return d.toISOString().split('T')[0];
+  });
+
+  const avgHist=hist.reduce((a,b)=>a+b,0)/hist.length;
+  const avgFut=future.reduce((a,b)=>a+b,0)/future.length;
+  const trend=((avgFut-avgHist)/avgHist*100);
+  const methods={sma:'Simple MA',wma:'Weighted MA',es:'Exp Smoothing',holt:"Holt's Trend"};
+
+  document.getElementById('status').textContent=`${sku} · ${hist.length} weeks · ${horizon}wk forecast`;
+
+  let html=`<div class="kpi-row">
+    <div class="kpi kp"><div class="kpi-label">Method</div><div class="kpi-val" style="font-size:18px;">${methods[method]}</div><div class="kpi-sub">${horizon}-week horizon</div></div>
+    <div class="kpi kt"><div class="kpi-label">MAPE</div><div class="kpi-val">${acc.mape!==null?acc.mape.toFixed(1)+'%':'—'}</div><div class="kpi-sub">mean abs % error</div></div>
+    <div class="kpi ko"><div class="kpi-label">MAE</div><div class="kpi-val">${acc.mae!==null?Math.round(acc.mae):'—'}</div><div class="kpi-sub">avg unit error</div></div>
+    <div class="kpi kg"><div class="kpi-label">Demand Trend</div><div class="kpi-val">${trend>=0?'+':''}${trend.toFixed(1)}%</div><div class="kpi-sub">forecast vs history</div></div>
+  </div>`;
+
+  // Chart
+  html+=`<div class="panel">
+    <div class="panel-header">
+      <div><div class="panel-title">Demand History + ${horizon}-Week Forecast — ${sku}</div><div class="panel-sub">${methods[method]}</div></div>
+      <button class="export-btn" onclick="exportForecast()">↓ Export</button>
+    </div>
+    <div class="panel-body">
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#a78bfa"></span>Actual</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2dd4bf"></span>Fitted</span>
+        <span class="legend-item"><span class="legend-line" style="border-color:#fb923c"></span>Forecast</span>
+        <span class="legend-item"><span class="legend-dot" style="background:rgba(251,146,60,0.2);border:1px solid #fb923c"></span>±15% CI</span>
+      </div>
+      <div class="chart-wrap">
+        ${buildSVGChart(weeks,hist,fitted,futureWeeks,future)}
+      </div>
+    </div>
+  </div>`;
+
+  // Accuracy
+  html+=`<div class="panel"><div class="panel-header"><div class="panel-title" style="font-size:15px;">Accuracy Metrics</div></div>
+  <div class="panel-body"><div class="acc-grid">
+    <div class="acc-cell">
+      <div class="ac-label">MAPE</div>
+      <div class="ac-val" style="color:${acc.mape<10?'var(--green)':acc.mape<20?'var(--teal)':'var(--orange)'};">${acc.mape!==null?acc.mape.toFixed(1)+'%':'—'}</div>
+      <div class="ac-sub">${acc.mape<10?'Excellent':acc.mape<15?'Good':acc.mape<25?'Acceptable':'Needs review'}</div>
+    </div>
+    <div class="acc-cell">
+      <div class="ac-label">MAE (units)</div>
+      <div class="ac-val" style="color:var(--purple);">${acc.mae!==null?Math.round(acc.mae):'—'}</div>
+      <div class="ac-sub">avg absolute error</div>
+    </div>
+    <div class="acc-cell">
+      <div class="ac-label">Bias</div>
+      <div class="ac-val" style="color:${Math.abs(acc.bias||0)<10?'var(--green)':'var(--orange)'};">${acc.bias!==null?(acc.bias>=0?'+':'')+acc.bias.toFixed(1):'—'}</div>
+      <div class="ac-sub">${(acc.bias||0)>5?'Over-forecasting':(acc.bias||0)<-5?'Under-forecasting':'Balanced'}</div>
+    </div>
+  </div></div></div>`;
+
+  // Forecast table
+  html+=`<div class="panel"><div class="panel-header"><div class="panel-title" style="font-size:15px;">Forecast — Next ${horizon} Weeks</div></div>
+  <table><thead><tr><th>Week</th><th>Forecast Qty</th><th>Low (−15%)</th><th>High (+15%)</th><th>Signal</th></tr></thead><tbody>`;
+  future.forEach((v,i)=>{
+    const low=Math.round(v*0.85),high=Math.round(v*1.15);
+    const chg=i===0?0:((v-future[i-1])/future[i-1]*100);
+    const sig=Math.abs(chg)<2?'<span class="pill pill-t">STABLE</span>':chg>0?`<span class="pill pill-p">↑ +${chg.toFixed(1)}%</span>`:`<span class="pill pill-o">↓ ${chg.toFixed(1)}%</span>`;
+    html+=`<tr>
+      <td>${futureWeeks[i]}</td>
+      <td style="color:var(--orange);font-weight:700;">${Math.round(v).toLocaleString()}</td>
+      <td style="color:#454860;">${low.toLocaleString()}</td>
+      <td style="color:#454860;">${high.toLocaleString()}</td>
+      <td>${sig}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+
+  document.getElementById('content').innerHTML=html;
+  window._forecast={sku,futureWeeks,future};
+}
+
+function exportForecast() {
+  if(!window._forecast)return;
+  const{sku,futureWeeks,future}=window._forecast;
+  const csv=['sku,week_start,forecast_qty,low_bound,high_bound',
+    ...future.map((v,i)=>`${sku},${futureWeeks[i]},${Math.round(v)},${Math.round(v*0.85)},${Math.round(v*1.15)}`)].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`forecast_${sku}.csv`;a.click();
+}
+
+function parseCSV(txt) {
+  const lines=txt.trim().split('\n');
+  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/\s+/g,'_'));
+  return lines.slice(1).map(line=>{
+    const vals=line.split(',');const obj={};
+    headers.forEach((h,i)=>obj[h]=(vals[i]||'').trim().replace(/^"|"$/g,''));
+    return obj;
+  }).filter(r=>r.sku&&r.week_start&&r.actual_demand);
+}
+
+function buildSkuData(rows) {
+  const map={};
+  rows.forEach(r=>{
+    if(!map[r.sku])map[r.sku]=[];
+    map[r.sku].push({week:r.week_start,demand:parseInt(r.actual_demand)||0});
+  });
+  Object.keys(map).forEach(k=>map[k].sort((a,b)=>a.week.localeCompare(b.week)));
+  return map;
+}
+
+function generateSample() {
+  const skus=[['SKU-ALPHA-001',420,0.15],['SKU-BETA-002',180,0.22],['SKU-GAMMA-003',750,0.10],['SKU-DELTA-004',95,0.30],['SKU-EPSILON-005',310,0.18]];
+  const rows=[];
+  const start=new Date('2023-01-02');
+  skus.forEach(([sku,base,noise])=>{
+    for(let w=0;w<104;w++){
+      const d=new Date(start);d.setDate(d.getDate()+w*7);
+      const season=1+0.25*Math.sin(2*Math.PI*(d.getMonth()-2)/12);
+      const n=1+(Math.random()-0.5)*2*noise;
+      const qty=Math.max(0,Math.round(base*season*n));
+      rows.push({sku,week_start:d.toISOString().split('T')[0],actual_demand:qty});
+    }
+  });
+  return rows;
+}
+
+function populateSKUs() {
+  const skus=Object.keys(skuData).sort();
+  const sel=document.getElementById('f-sku');
+  sel.innerHTML='<option value="">Select SKU...</option>'+skus.map(s=>`<option value="${s}">${s}</option>`).join('');
+  if(skus.length){sel.value=skus[0];render();}
+}
+
+// Events
+document.getElementById('sample-btn').addEventListener('click',()=>{
+  skuData=buildSkuData(generateSample());populateSKUs();
+});
+document.getElementById('zone').addEventListener('click',()=>document.getElementById('file-in').click());
+document.getElementById('file-in').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=ev=>{skuData=buildSkuData(parseCSV(ev.target.result));populateSKUs();};r.readAsText(f);
+});
+['f-sku','f-method'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+[['f-window','win-val',' wk'],['f-horizon','hor-val',' wk'],['f-alpha','alpha-val','']].forEach(([id,lbl,sfx])=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    document.getElementById(lbl).textContent=(id==='f-alpha'?(e.target.value/10).toFixed(1):e.target.value)+sfx;
+    render();
+  });
+});
+</script>
+</body>
+</html>
